@@ -67,14 +67,19 @@ def split_pdf():
 
             result = subprocess.run(command, capture_output=True, text=True, check=False)
 
-            # qpdf returns 2 when it succeeds with warnings (e.g., corrupt streams).
-            # Treat exit codes 0 and 2 as non-fatal as long as the output file exists.
-            if result.returncode not in (0, 2):
-                app.logger.error(f"qpdf error for range '{page_range}': {result.stderr}")
-                raise ValueError(f"Failed to process range '{page_range}': {result.stderr}")
+            # Log any non-zero exit code for diagnostics but only treat it as fatal
+            # if qpdf didn’t produce the requested output file.
+            if result.returncode != 0:
+                app.logger.warning(
+                    f"qpdf exit {result.returncode} for range '{page_range}': {result.stderr.strip()}"
+                )
 
-            if os.path.exists(output_pdf_path):
+            if os.path.exists(output_pdf_path) and os.path.getsize(output_pdf_path) > 0:
                 output_filenames.append(output_filename)
+            else:
+                raise ValueError(
+                    f"Failed to process range '{page_range}': no output produced by qpdf"
+                )
 
         if not output_filenames:
             return jsonify({"error": "No pages were extracted. Please check your page ranges."}), 400
